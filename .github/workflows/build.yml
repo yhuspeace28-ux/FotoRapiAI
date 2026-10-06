@@ -14,20 +14,41 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Extract v3 project
+        run: |
+          rm -rf project
+          mkdir -p project
+          unzip -q -o NaturalPhotoOffline_AI_v3.zip -d project
+          test -f project/settings.gradle.kts
+          test -f project/app/build.gradle.kts
+
+      - name: Download MI-GAN model
+        run: |
+          mkdir -p project/app/src/main/assets
+          curl -L --fail --retry 3 \
+            -o project/app/src/main/assets/migan_fp16.tflite \
+            "https://huggingface.co/litert-community/MI-GAN-512-Places2-LiteRT/resolve/main/migan_fp16.tflite?download=true"
+          test -s project/app/src/main/assets/migan_fp16.tflite
+          test "$(stat -c%s project/app/src/main/assets/migan_fp16.tflite)" -gt 10000000
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          distribution: temurin
+          java-version: "17"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
 
       - name: Build APK
-        run: gradle assembleDebug --stacktrace
+        run: |
+          cd project
+          gradle --no-daemon :app:assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FotoRapiAI-APK
-          path: 'app/build/outputs/apk/debug/*.apk'
+          name: NaturalPhotoOffline-APK
+          path: project/app/build/outputs/apk/debug/*.apk
