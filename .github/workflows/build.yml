@@ -1,37 +1,69 @@
-name: Build APK
+name: Build FotoRapiAI v4
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 jobs:
-  build:
+  build-apk:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract v3 project
+      - name: Extract FotoRapiAI v4
+        shell: bash
         run: |
-          rm -rf project
-          mkdir -p project
-          unzip -q -o NaturalPhotoOffline_AI_v3.zip -d project
-          test -f project/settings.gradle.kts
-          test -f project/app/build.gradle.kts
+          set -e
+
+          echo "Memeriksa source v4..."
+
+          test -f fotorapi-v4-source.zip
+
+          rm -rf app
+          rm -f build.gradle.kts
+          rm -f settings.gradle.kts
+          rm -f gradle.properties
+
+          rm -rf /tmp/fotorapi-v4
+          mkdir -p /tmp/fotorapi-v4
+
+          unzip -q fotorapi-v4-source.zip \
+            -d /tmp/fotorapi-v4
+
+          cp -a /tmp/fotorapi-v4/. .
+
+          echo "Memeriksa project..."
+          test -f settings.gradle.kts
+          test -f build.gradle.kts
+          test -f app/build.gradle.kts
+          test -f app/src/main/AndroidManifest.xml
+          test -f app/src/main/java/com/fotorapi/app/MainActivity.kt
+
+          echo "Source v4 siap."
 
       - name: Download MI-GAN model
+        shell: bash
         run: |
-          mkdir -p project/app/src/main/assets
-          curl -L --fail --retry 3 \
-            -o project/app/src/main/assets/migan_fp16.tflite \
-            "https://huggingface.co/litert-community/MI-GAN-512-Places2-LiteRT/resolve/main/migan_fp16.tflite?download=true"
-          test -s project/app/src/main/assets/migan_fp16.tflite
-          test "$(stat -c%s project/app/src/main/assets/migan_fp16.tflite)" -gt 10000000
+          set -e
 
-      - name: Setup Java
+          mkdir -p app/src/main/assets
+
+          echo "Mengunduh MI-GAN..."
+
+          curl -L \
+            --fail \
+            --retry 3 \
+            --retry-all-errors \
+            "https://huggingface.co/litert-community/MI-GAN-512-Places2-LiteRT/resolve/main/migan_fp16.tflite?download=true" \
+            -o app/src/main/assets/migan_fp16.tflite
+
+          test -s app/src/main/assets/migan_fp16.tflite
+
+          echo "Model berhasil:"
+          ls -lh app/src/main/assets/migan_fp16.tflite
+
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -42,13 +74,36 @@ jobs:
         with:
           gradle-version: "8.7"
 
-      - name: Build APK
+      - name: Show project information
+        shell: bash
         run: |
-          cd project
-          gradle --no-daemon :app:assembleDebug --stacktrace
+          echo "===== JAVA ====="
+          java -version
+
+          echo "===== GRADLE ====="
+          gradle --version
+
+          echo "===== PROJECT ====="
+          find app/src/main -maxdepth 4 -type f | sort
+
+      - name: Build APK
+        shell: bash
+        run: |
+          set -e
+
+          echo "Memulai build FotoRapiAI v4..."
+
+          gradle :app:assembleDebug --no-daemon --stacktrace
+
+          test -f app/build/outputs/apk/debug/app-debug.apk
+
+          echo "APK berhasil dibuat:"
+          ls -lh app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: NaturalPhotoOffline-APK
-          path: project/app/build/outputs/apk/debug/*.apk
+          name: FotoRapiAI-v4-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
